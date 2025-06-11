@@ -17,10 +17,6 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
     beta_rho = np.zeros(n)
     nu_rho = np.zeros(n)
 
-    # Init for u
-    beta_u = np.zeros(n)
-    nu_u = np.zeros(n)
-
     # Init for E
     # beta_E = np.zeros(n)
     # nu_E = np.zeros(n)
@@ -35,6 +31,8 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
         beta_rho = np.zeros(n)
         beta_u = np.zeros(n)
 
+
+        nu_rho = np.zeros(n)
         monotonicity = False
         
         while not monotonicity:
@@ -42,15 +40,10 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
 
 
             rho_star = psi_p * rho_s1 + (1 - psi_p) * rho_s
-            u_star = psi_u * u_s1 + (1 - psi_u) * u_s
 
             kr = (np.abs(u_s) / 2) * (tau / h)
 
             mu_star = np.zeros(n-1)
-            pi_star = np.zeros(n-1)
-
-            P = np.zeros(n-1)
-            E_star = np.zeros(n-1)
 
             # Rho
             for i in range(1, n-1):
@@ -68,24 +61,10 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
                 h_half = 0.5 * (h[i] + h[i-1])
                 rho_s1[i] = rho[i] - (tau / h_half) * (mu_star[i] - mu_star[i-1])
             
-            
-            # U
-            for i in range(1, n-1):
-                h_half = 0.5 * (h[i] + h[i-1])
-                P[i] = (c0**2) * rho[i]
-                pi_star[i] = P[i]/2 - (nu_u[i] / h_half)*(rho_star[i+1]*u_star[i+1] - rho_star[i]*u_star[i])/2
-
-            pi_star[0] = P[0]/2 - (nu_u[0] / h[0])*(rho_star[1]*u_star[1] - rho_star[0]*u_star[0])/2
-            for i in range(1, n-1):
-                h_half = 0.5 * (h[i] + h[i-1])
-                u_s1[i] = (1/rho_s1[i])*(rho[i]* u[i] - (tau / h_half)*(pi_star[i] - pi_star[i-1]) - (tau / h_half)*(mu_star[i]*u_star[i] - mu_star[i-1]*u_star[i-1]))
-
-            
 
             monotonicity = True
             for i in range(1, n-2):
                 nonmono_rho = (rho_s1[i+1] - rho_s1[i]) * (rho_s1[i] - rho_s1[i-1]) < 0
-                nonmono_u = (u_s1[i+1] - u_s1[i]) * (u_s1[i] - u_s1[i-1]) < 0
                 if nonmono_rho:
                     # print('ok')
                     if beta_rho[i-1] < beta_limiter and beta_rho[i] < beta_limiter:
@@ -95,23 +74,50 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
                         beta_rho[i] += const_beta * kr[i]
                         # print('in')
                         monotonicity = False
+            
+            nu_rho = beta_rho * (h ** 2) / tau
+
+        # Init for u
+        beta_u = np.zeros(n)
+        nu_u = np.zeros(n)
+        monotonicity = False
+        while not monotonicity:
+            print(f"Iteration s' = {s}")
+            u_star = psi_u * u_s1 + (1 - psi_u) * u_s
+
+            kr = (np.abs(u_s) / 2) * (tau / h)
+
+            # mu_star = np.zeros(n-1)
+            pi_star = np.zeros(n)
+
+            P = np.zeros(n)
+
+            # U
+            for i in range(1, n-1):
+                h_half = 0.5 * (h[i] + h[i-1])
+                P[i] = (c0**2) * rho[i]
+                #P[i+1] = (c0**2) * rho[i+1]
+            for i in range(1, n-1):
+                h_half = 0.5 * (h[i] + h[i-1])
+                pi_star[i] = (P[i] + P[i+1])/2 - (nu_u[i] / h_half)*(rho_star[i+1]*u_star[i+1] - rho_star[i]*u_star[i])
+
+            pi_star[n-1] = P[n-1] - (nu_u[n-1] / h[n-1])*(rho_star[n-1]*u_star[n-1] - rho_star[n-2]*u_star[n-2])
+            pi_star[0] = P[0] - (nu_u[0] / h[0])*(rho_star[1]*u_star[1] - rho_star[0]*u_star[0])
+            for i in range(2, n-1):
+                h_half = 0.5 * (h[i] + h[i-1])
+                u_s1[i] = (1/rho_s1[i])*(rho[i]* u[i] - (tau / h_half)*(pi_star[i] - pi_star[i-1]) - (tau / h_half)*(mu_star[i]*u_star[i] - mu_star[i-1]*u_star[i-1]))
+
+            monotonicity = True
+            for i in range(1, n-2):
+                nonmono_u = (u_s1[i+1] - u_s1[i]) * (u_s1[i] - u_s1[i-1]) < 0
                 if nonmono_u:
                     if beta_u[i-1] < beta_limiter and beta_u[i] < beta_limiter:
-                        # beta_rho[i] = beta_limiter
-                        # beta_rho[i-1] = beta_limiter
+                        # beta_u[i] = beta_limiter
+                        # beta_u[i-1] = beta_limiter
                         beta_u[i-1] += const_beta * kr[i-1]
                         beta_u[i] += const_beta * kr[i]
                         # print('in')
                         monotonicity = False
-
-            
-
-            # for i in range(1, n-1):
-            #     h_half = 0.5 * (h[i] + h[i-1])
-            #     E_half = 0.5 * (E[i] + E[i-1])
-            #     u_half = 0.5 * (u[i] + u[i-1])
-
-            nu_rho = beta_rho * (h ** 2) / tau
             # print(f"beta = {beta_rho}")
             nu_u = beta_u * (h**2) / tau
             # nu_e
@@ -121,7 +127,7 @@ def method_1(rho, u, E, h, tau, max_iter, psi_p=0.5, psi_u=0.5, beta_limiter=0.2
         conv_rho = np.zeros(n, dtype=bool)
         conv_u = np.zeros(n, dtype=bool)
         for i in range(1, n-1):
-            y_max[i] = max(np.max(np.abs(rho_s1[i])), np.max(np.abs(u_s1[i])), np.max(np.abs(E_s1[i])))
+            y_max[i] = max(np.max(np.abs(rho_s1[i])), np.max(np.abs(u_s1[i])))
             conv_rho[i] = np.all(np.abs(rho_s1[i] - rho_s[i]) < eps_rel * y_max + eps_abs)
             conv_u[i] = np.all(np.abs(u_s1[i] - u_s[i]) < eps_rel * y_max + eps_abs)
             # conv_E = np.all(np.abs(E_s1 - E_s) < eps_rel * y_max + eps_abs)
@@ -173,6 +179,13 @@ u[1] = W1
 p[0] = PSW1
 p[1] = PSW1
 
+def apply_boundary_conditions(rho, u, RSW1, W1):
+    rho[0] = RSW1
+    rho[1] = RSW1
+    u[0] = W1
+    u[1] = W1
+
+
 E = p / (gamma - 1) + 0.5 * rho * u**2
 
 
@@ -198,13 +211,14 @@ T_current = 0.0
 
 max_iter_init = 10
 
-while T_current <= 100 * tau:
+while T_current <= 10 * tau:
     print(f"\n== Time step at T = {T_current:.4f} ==")
     rho_s1, u_s1, s = method_1(rho0, u0, E0, h, tau, max_iter=max_iter_init)
 
     rho0 = rho_s1.copy()
     u0 = u_s1.copy()
     
+    # apply_boundary_conditions(rho0, u0, RSW1, W1)
 
     T_current += tau
 
